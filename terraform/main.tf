@@ -1,8 +1,8 @@
 module "kubernetes" {
   source  = "roberthstrand/kubernetes/azurerm"
-  version = "1.1.0"
+  version = "1.2.1"
 
-  name           = "kastendemo"
+  name           = "k10-demo"
   resource_group = azurerm_resource_group.cluster.name
   subnet_id      = azurerm_subnet.aks.id
   # The default deployment is managed, with RBAC. This means that you have to define a group or groups
@@ -11,19 +11,16 @@ module "kubernetes" {
   # azuread_groups data source like we do here.
   admin_groups = data.azuread_groups.admins.object_ids
 
-  additional_node_pools = [{
-    name                = "pool01"
+  default_node_pool = [{
+    name                = "default"
     vm_size             = "Standard_D2s_v3"
-    node_count          = 2
-    enable_auto_scaling = true
-    min_count           = 2
-    max_count           = 3
-    node_labels = {
-      "type" = "karsten"
-    }
-    tags = null
+    node_count          = 1
+    enable_auto_scaling = false
+    min_count           = null
+    max_count           = null
     additional_settings = {
-      max_pods = 30
+      max_pods        = 100
+      os_disk_size_gb = 60
     }
   }]
 
@@ -37,6 +34,15 @@ module "kubernetes" {
         environment = "production"
         type        = "backup"
       }
+    },
+    {
+      name = "nginx-test"
+      annotations = {
+        source = "terraform"
+      }
+      labels = {
+        environment = "production"
+      }
     }
   ]
 
@@ -44,20 +50,35 @@ module "kubernetes" {
 }
 
 resource "azurerm_resource_group" "cluster" {
-  name     = "kastendemo-rg"
+  name     = "k10-demo-rg"
   location = "West Europe"
 }
 
 resource "azurerm_virtual_network" "cluster" {
-  name                = "kastendemo-vnet"
+  name                = "k10-demo-vnet"
   location            = azurerm_resource_group.cluster.location
   resource_group_name = azurerm_resource_group.cluster.name
-  address_space       = ["10.0.0.0/16"]
+  address_space       = ["10.0.0.0/20"]
 }
 
 resource "azurerm_subnet" "aks" {
   name                 = "aks"
   resource_group_name  = azurerm_resource_group.cluster.name
   virtual_network_name = azurerm_virtual_network.cluster.name
-  address_prefixes     = ["10.0.0.0/24"]
+  address_prefixes     = ["10.0.0.0/22"]
+}
+resource "azurerm_storage_account" "kasten" {
+  name                     = "rsk10storagedemo"
+  location                 = azurerm_resource_group.cluster.location
+  resource_group_name      = azurerm_resource_group.cluster.name
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+}
+resource "azurerm_storage_container" "kasten" {
+  name                  = "backup"
+  storage_account_name  = azurerm_storage_account.kasten.name
+  container_access_type = "private"
+}
+output "storage" {
+  value = azurerm_storage_account.kasten.primary_access_key
 }

@@ -21,4 +21,17 @@ resource "helm_release" "kasten" {
     name  = "secrets.azureClientSecret"
     value = var.kasten_clientsecret
   }
+
+  set {
+    name  = "prometheus.enabled"
+    value = false
+  }
+}
+
+resource "helm_release" "nginx" {
+  name       = "nginx"
+  repository = "https://charts.bitnami.com/bitnami"
+  chart      = "nginx"
+
+  namespace = "nginx-test"
 }
